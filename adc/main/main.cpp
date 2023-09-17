@@ -8,10 +8,10 @@
 
 void mainTask(void *)
 {
-    data::MovingAverage<int, int, 512> average;
+    data::MovingAverage<int, float, 512> average;
     driver::Adc adc(ADC_UNIT_1, ADC_CHANNEL_4);
 
-    while(1)
+    while(true)
     {
         adc.read();
         int voltage = adc.to_voltage() * 2 + 100;
