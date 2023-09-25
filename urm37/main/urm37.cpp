@@ -25,7 +25,7 @@ private:
   driver::Gpio trigger_;
   // シグナル時のキャプチャ数
   uint32_t sample_begin_;
-  // 割り込みからデータを共有するためのキュー
+  // 通知用タスクハンドラ
   TaskHandle_t task_;
 
   // キャプチャー対象のエッジを検出したときに実行するコールバック関数(ISR)
@@ -112,7 +112,7 @@ public:
     }
     // 掛かった時間[us]に換算
     float duration_us = static_cast<float>(ticks) * (1'000'000.0f / static_cast<float>(resolution));
-    // mmに変換(1cmあたり50us)
+    // cmに変換(1cmあたり50us)
     distance_cm = duration_us / 50.0f;
     return true;
   }
