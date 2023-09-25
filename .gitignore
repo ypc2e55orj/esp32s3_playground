@@ -1,4 +1,6 @@
 sdkconfig.old
 build
+cmake-build-debug
 .cache
 .vscode
+.idea
