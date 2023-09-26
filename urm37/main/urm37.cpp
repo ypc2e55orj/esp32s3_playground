@@ -18,7 +18,7 @@ class Urm37v5::Urm37v5Impl
 {
 private:
   // MCPWMタイマーハンドラ
-  mcpwm_cap_timer_handle_t cap_timer_;
+  static mcpwm_cap_timer_handle_t cap_timer_;
   // MCPWMチャンネルハンドラ(パルス幅測定用)
   mcpwm_cap_channel_handle_t cap_chan_;
   // URM37測定開始トリガー
@@ -59,15 +59,20 @@ private:
 
 public:
   explicit Urm37v5Impl(gpio_num_t pin_trigger, gpio_num_t pin_echo)
-    : cap_timer_(nullptr), cap_chan_(nullptr),
+    : cap_chan_(nullptr),
       trigger_(pin_trigger, GPIO_MODE_OUTPUT, false, false),
       sample_begin_(0), task_(xTaskGetCurrentTaskHandle())
   {
-    // タイマーを初期化
-    mcpwm_capture_timer_config_t timer_config = {};
-    timer_config.clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT;
-    timer_config.group_id = 0;
-    ESP_ERROR_CHECK(mcpwm_new_capture_timer(&timer_config, &cap_timer_));
+    if (!cap_timer_)
+    {
+      // タイマーを初期化
+      mcpwm_capture_timer_config_t timer_config = {};
+      timer_config.clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT;
+      timer_config.group_id = 0;
+      ESP_ERROR_CHECK(mcpwm_new_capture_timer(&timer_config, &cap_timer_));
+      // タイマーを有効化
+      ESP_ERROR_CHECK(mcpwm_capture_timer_enable(cap_timer_));
+    }
     // チャンネルを初期化
     mcpwm_capture_channel_config_t chan_config = {};
     chan_config.gpio_num = pin_echo;
@@ -83,23 +88,25 @@ public:
     callbacks.on_cap = Urm37v5::Urm37v5Impl::callback;
     ESP_ERROR_CHECK(
       mcpwm_capture_channel_register_event_callbacks(cap_chan_, &callbacks, reinterpret_cast<void *>(this)));
-
-    // チャンネルを有効化
-    ESP_ERROR_CHECK(mcpwm_capture_channel_enable(cap_chan_));
-    // タイマーを有効化
-    ESP_ERROR_CHECK(mcpwm_capture_timer_enable(cap_timer_));
-    // タイマーを開始
-    ESP_ERROR_CHECK(mcpwm_capture_timer_start(cap_timer_));
   }
 
   // cm精度で距離を取得する
   bool distance(float &distance_cm, uint32_t timeout_ms)
   {
     uint32_t ticks = 0;
+    // チャンネルを有効化
+    ESP_ERROR_CHECK(mcpwm_capture_channel_enable(cap_chan_));
+    // タイマーを開始
+    ESP_ERROR_CHECK(mcpwm_capture_timer_start(cap_timer_));
     // トリガー
     trigger();
     // キャプチャ完了を待つ
-    if (xTaskNotifyWait(0x00, ULONG_MAX, &ticks, pdMS_TO_TICKS(timeout_ms)) == pdFALSE)
+    BaseType_t xResult = xTaskNotifyWait(0x00, ULONG_MAX, &ticks, pdMS_TO_TICKS(timeout_ms));
+    // チャンネルを無効化
+    ESP_ERROR_CHECK(mcpwm_capture_channel_disable(cap_chan_));
+    // タイマーを停止
+    ESP_ERROR_CHECK(mcpwm_capture_timer_stop(cap_timer_));
+    if (xResult == pdFALSE)
     {
       return false; // タイムアウト
     }
@@ -117,6 +124,8 @@ public:
     return true;
   }
 };
+
+mcpwm_cap_timer_handle_t Urm37v5::Urm37v5Impl::cap_timer_ = nullptr;
 
 Urm37v5::Urm37v5(gpio_num_t pin_trigger, gpio_num_t pin_echo)
   : impl_(new Urm37v5Impl(pin_trigger, pin_echo))
