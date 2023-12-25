@@ -1,6 +1,13 @@
+# ESP-IDF
 sdkconfig.old
 build
-cmake-build-debug
-.cache
-.vscode
+managed_components
+
+# CLion
 .idea
+cmake-build-*
+
+# VSCode
+.vscode
+.cache
+
